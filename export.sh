@@ -15,7 +15,7 @@ OPTIONS
 
 ARGUMENTS
 =========
-dir          number of one or more videos to look for
+dir          directory to write output files
 
 EXAMPLES
 ========

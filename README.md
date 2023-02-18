@@ -1,4 +1,5 @@
 # lastpass-export
 
 ## TODO
-[ ] Encryption at rest
+- [ ] Encryption at rest.
+- [ ] Show progress.
