@@ -1,8 +1,11 @@
 #!/bin/bash
 
+# enable extended pattern matching features
+shopt -s extglob
+
 usage() {
     cat << EOT 1>&2
-Usage: export.sh [-h] [-d] [-f] [-c opt] [-s] -u username dir
+Usage: export.sh [-dfhjs] [-c opt] -u username dir
 
 OPTIONS
 =======
@@ -10,6 +13,7 @@ OPTIONS
 -d           output debug information
 -f           overwrite output file if it already exists
 -h           show help
+-j           write output using JSON format
 -s           stay logged in after script finishes
 -u username  login to LastPass using username
 
@@ -19,8 +23,8 @@ dir          directory to write output files
 
 EXAMPLES
 ========
-# export LastPass items for myusername to /tmp/lpass
-$ export.sh -d -f -s -u myusername /tmp/lpass
+# export LastPass items for myusername to /tmp/lpass directory in JSON format
+$ export.sh -d -f -j -s -u myusername /tmp/lpass
 
 EOT
 
@@ -35,24 +39,31 @@ debug() {
     fi
 }
 
-while getopts ":hc:dfsu:" FLAG; do
+while getopts ":c:dfhjsu:" FLAG; do
     case "${FLAG}" in
+        c)
+            if [[ ${OPTARG} == @(auto|never|always) ]]; then
+                COLOR_OPTION="--color=${OPTARG}"
+            fi
+            ;;
+
         d)
             DEBUG='true'
 
             debug "Debug mode turned on."
             ;;
 
-        c)
-            if [[ ${OPTARG} == 'auto' ]] || [[ ${OPTARG} == 'never' ]] || [[ ${OPTARG} == 'always' ]]; then
-                COLOR_OPTION="--color=${OPTARG}"
-            fi
-            ;;
-
         f)
             OVERWRITE_OPTION='-f'
 
             debug "Force overwrite mode turned on."
+            ;;
+
+        j)
+            ITEM_EXTENSION='json'
+            JSON_OPTION='--json'
+
+            debug "JSON output format turned on."
             ;;
 
         s)
@@ -79,7 +90,7 @@ shift $(( OPTIND - 1 ))
 
 OUTPUT_DIR=$1
 
-if [[ -z ${USERNAME} ]] || [[ -z ${OUTPUT_DIR} ]]; then
+if [[ -z ${USERNAME} || -z ${OUTPUT_DIR} ]]; then
     debug "Missing username and/or output directory."
 
     usage
@@ -97,16 +108,26 @@ setDefaults() {
 
         debug "Overwrite option set to default of '${OVERWRITE_OPTION}'."
     fi
+
+    if [[ -z ${JSON_OPTION} ]]; then
+        ITEM_EXTENSION='txt'
+
+        debug "Item extension set to default of '${ITEM_EXTENSION}'."
+
+        JSON_OPTION=''
+
+        debug "JSON option set to default of '${JSON_OPTION}'."
+    fi
 }
 
 setDefaults
 
 dependencyCheck() {
-    for d in cat cut file grep lpass realpath sed; do
-        debug "Checking for dependency '${d}'."
+    for DEPENDENCY in cat cut file grep lpass mkdir realpath sed wc; do
+        debug "Checking for dependency '${DEPENDENCY}'."
 
-        if ! command -v ${d} &> /dev/null; then
-            echo "Dependency '${d}' is missing." > /dev/stderr
+        if ! command -v ${DEPENDENCY} &> /dev/null; then
+            echo "Dependency '${DEPENDENCY}' is missing." > /dev/stderr
 
             exit
         fi
@@ -131,6 +152,10 @@ logout() {
     fi
 }
 
+cutAndTrim() {
+    echo "$1" | cut -d $2 -f $3 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+}
+
 renameAttachment() {
     debug "Trying to rename attachment '${ATTACHMENT_FILE}'."
 
@@ -141,7 +166,7 @@ renameAttachment() {
         application/rtf | application/zip | image/bmp | \
         image/gif | image/jpeg | image/png | image/tiff | \
         text/csv | text/html | text/plain | video/mp4 )
-            EXTENSION=$(echo "${MIME_TYPE}" | cut -d '/' -f 2)
+            EXTENSION=$(cutAndTrim "${MIME_TYPE}" '/' 2)
             ;;
 
         application/java-archive)
@@ -167,7 +192,7 @@ renameAttachment() {
             ;;
     esac
 
-    if [[ ! -z ${EXTENSION} ]]; then
+    if [[ -n ${EXTENSION} ]]; then
         debug "Renaming attachment to '${ATTACHMENT_FILE}.${EXTENSION}'."
 
         mv "${ATTACHMENT_FILE}" "${ATTACHMENT_FILE}.${EXTENSION}"
@@ -183,7 +208,7 @@ exportAttachment() {
 
     ATTACHMENT_FILE=${ATTACHMENTS_DIR}/${ATTACHMENT_FILE}
 
-    if [[ -z ${ITEM_ID} ]] || [[ -z ${ATTACHMENT_ID} ]]; then
+    if [[ -z ${ITEM_ID} || -z ${ATTACHMENT_ID} ]]; then
         debug "Missing attachment information '${ITEM_ID}' or '${ATTACHMENT_ID}'."
     else
         debug "Exporting attachment '${ATTACHMENT_ID}' to '${ATTACHMENT_FILE}'."
@@ -199,7 +224,7 @@ exportAttachment() {
 exportItem() {
     debug "Exporting item '${ITEM_ID}' to '${OUTPUT_FILE}'."
 
-    lpass show --json --all ${COLOR_OPTION} ${ITEM_ID} > "${OUTPUT_FILE}"
+    lpass show ${JSON_OPTION} --all ${COLOR_OPTION} ${ITEM_ID} > "${OUTPUT_FILE}"
 
     while read -r LINE; do
         ATTACHMENTS_DIR=${OUTPUT_DIR}/${ITEM_ID}
@@ -210,8 +235,8 @@ exportItem() {
             mkdir ${ATTACHMENTS_DIR}
         fi
 
-        ATTACHMENT_ID=$(echo $LINE | cut -d ':' -f 1 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-        ATTACHMENT_FILE=$(echo $LINE | cut -d ':' -f 2 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        ATTACHMENT_ID=$(cutAndTrim "${LINE}" ':' 1)
+        ATTACHMENT_FILE=$(cutAndTrim "${LINE}" ':' 2)
 
         exportAttachment
     done < <(lpass show ${COLOR_OPTION} ${ITEM_ID} | grep '^att-')
@@ -230,16 +255,10 @@ NUM_ITEMS=$(echo ${ITEM_IDS} | wc -w)
 debug "Found ${NUM_ITEMS} items."
 
 for ITEM_ID in ${ITEM_IDS}; do
-    OUTPUT_FILE=${OUTPUT_DIR}/${ITEM_ID}.json
+    OUTPUT_FILE=${OUTPUT_DIR}/${ITEM_ID}.${ITEM_EXTENSION}
 
-    if [[ -s ${OUTPUT_FILE} ]]; then
-        if [[ ! -z ${OVERWRITE_OPTION} ]]; then
-            debug "Overwriting existing item '${OUTPUT_FILE}'."
-
-            exportItem
-        else
-            debug "Item already exists '${OUTPUT_FILE}'. Use -f option to overwrite."
-        fi
+    if [[ -s ${OUTPUT_FILE} && -z ${OVERWRITE_OPTION} ]]; then
+        debug "Item already exists '${OUTPUT_FILE}'. Use -f option to overwrite."
     else
         exportItem
     fi
