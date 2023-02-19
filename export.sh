@@ -5,7 +5,7 @@ shopt -s extglob
 
 usage() {
     cat << EOT 1>&2
-Usage: export.sh [-dfhjs] [-c opt] -u username dir
+Usage: export.sh [-dfhjqs] [-c opt] -u username dir
 
 OPTIONS
 =======
@@ -14,6 +14,7 @@ OPTIONS
 -f           overwrite output file if it already exists
 -h           show help
 -j           write output using JSON format
+-q           do not display status information
 -s           stay logged in after script finishes
 -u username  login to LastPass using username
 
@@ -39,11 +40,13 @@ debug() {
     fi
 }
 
-while getopts ":c:dfhjsu:" FLAG; do
+while getopts ":c:dfhjqsu:" FLAG; do
     case "${FLAG}" in
         c)
             if [[ ${OPTARG} == @(auto|never|always) ]]; then
                 COLOR_OPTION="--color=${OPTARG}"
+            else
+                debug "Invalid color option '${OPTARG}'."
             fi
             ;;
 
@@ -64,6 +67,12 @@ while getopts ":c:dfhjsu:" FLAG; do
             JSON_OPTION='--json'
 
             debug "JSON output format turned on."
+            ;;
+
+        q)
+            BE_QUIET='true'
+
+            debug "Quiet mode turned on."
             ;;
 
         s)
@@ -201,6 +210,7 @@ renameAttachment() {
 
 exportAttachment() {
     if [[ -z ${ATTACHMENT_FILE} ]]; then
+        # handle un-named attachments
         ATTACHMENT_FILE=${ATTACHMENT_ID}
 
         TRY_RENAME='true'
@@ -242,6 +252,10 @@ exportItem() {
     done < <(lpass show ${COLOR_OPTION} ${ITEM_ID} | grep '^att-')
 }
 
+showProgress() {
+    debug "Progress goes here ${ITEM_COUNTER} ${NUM_ITEMS}."
+}
+
 OUTPUT_DIR=$(realpath ${OUTPUT_DIR})
 
 login
@@ -252,18 +266,28 @@ ITEM_IDS=$(lpass ls -l --format '%ai' ${COLOR_OPTION})
 
 NUM_ITEMS=$(echo ${ITEM_IDS} | wc -w)
 
-debug "Found ${NUM_ITEMS} items."
+if [[ ${NUM_ITEMS} -gt 0 ]]; then
+    debug "Found ${NUM_ITEMS} items."
 
-for ITEM_ID in ${ITEM_IDS}; do
-    OUTPUT_FILE=${OUTPUT_DIR}/${ITEM_ID}.${ITEM_EXTENSION}
+    ITEM_COUNTER=0
 
-    if [[ -s ${OUTPUT_FILE} && -z ${OVERWRITE_OPTION} ]]; then
-        debug "Item already exists '${OUTPUT_FILE}'. Use -f option to overwrite."
-    else
-        exportItem
-    fi
+    for ITEM_ID in ${ITEM_IDS}; do
+        OUTPUT_FILE=${OUTPUT_DIR}/${ITEM_ID}.${ITEM_EXTENSION}
 
-    #showProgress
-done
+        if [[ -s ${OUTPUT_FILE} && -z ${OVERWRITE_OPTION} ]]; then
+            debug "Item already exists '${OUTPUT_FILE}'. Use -f option to overwrite."
+        else
+            exportItem
+        fi
+
+        $(( ITEM_COUNTER++ ))
+
+        if [[ -z ${BE_QUIET} ]]; then
+            showProgress
+        fi
+    done
+else
+    debug "No items found for '${USERNAME}'."
+fi
 
 logout
