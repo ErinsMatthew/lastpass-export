@@ -271,6 +271,8 @@ exportAttachment() {
     else
         debug "Exporting attachment '${ATTACHMENT_ID}' to '${ATTACHMENT_FILE}'."
 
+        # FIXME: Need to guess type before encryption if un-named attachment, without calling lpass show twice
+
         lpass show ${COLOR_OPTION} ${ITEM_ID} --attach ${ATTACHMENT_ID} --quiet | encryptData > "${ATTACHMENT_FILE}"
     fi
 
