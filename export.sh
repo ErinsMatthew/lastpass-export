@@ -45,6 +45,8 @@ while getopts ":c:dfhjqsu:" FLAG; do
         c)
             if [[ ${OPTARG} == @(auto|never|always) ]]; then
                 COLOR_OPTION="--color=${OPTARG}"
+
+                debug "Setting color option to '${OPTARG}'."
             else
                 debug "Invalid color option '${OPTARG}'."
             fi
@@ -132,7 +134,7 @@ setDefaults() {
 setDefaults
 
 dependencyCheck() {
-    for DEPENDENCY in cat cut file grep lpass mkdir realpath sed wc; do
+    for DEPENDENCY in cat cut file grep lpass mkdir mv realpath sed wc; do
         debug "Checking for dependency '${DEPENDENCY}'."
 
         if ! command -v ${DEPENDENCY} &> /dev/null; then
@@ -148,7 +150,7 @@ dependencyCheck
 login() {
     debug "Logging into LastPass as '${USERNAME}'."
 
-    #lpass login ${OVERWRITE_OPTION} ${COLOR_OPTION} $USERNAME
+    lpass login ${OVERWRITE_OPTION} ${COLOR_OPTION} $USERNAME
 }
 
 logout() {
@@ -175,7 +177,7 @@ renameAttachment() {
         application/rtf | application/zip | image/bmp | \
         image/gif | image/jpeg | image/png | image/tiff | \
         text/csv | text/html | text/plain | video/mp4 )
-            EXTENSION=$(cutAndTrim "${MIME_TYPE}" '/' 2)
+            EXTENSION=$(cutAndTrim "${MIME_TYPE}" / 2)
             ;;
 
         application/java-archive)
@@ -223,7 +225,7 @@ exportAttachment() {
     else
         debug "Exporting attachment '${ATTACHMENT_ID}' to '${ATTACHMENT_FILE}'."
 
-        lpass show ${ITEM_ID} --attach ${ATTACHMENT_ID} --quiet > "${ATTACHMENT_FILE}"
+        lpass show ${COLOR_OPTION} ${ITEM_ID} --attach ${ATTACHMENT_ID} --quiet > "${ATTACHMENT_FILE}"
     fi
 
     if [[ ${TRY_RENAME} == 'true' ]]; then
@@ -236,24 +238,25 @@ exportItem() {
 
     lpass show ${JSON_OPTION} --all ${COLOR_OPTION} ${ITEM_ID} > "${OUTPUT_FILE}"
 
+    # export item attachments
     while read -r LINE; do
         ATTACHMENTS_DIR=${OUTPUT_DIR}/${ITEM_ID}
 
         if [[ ! -d ${ATTACHMENTS_DIR} ]]; then
-            debug "Making directory '${ITEM_ID}' for attachments."
+            debug "Making directory '${ITEM_ID}' for item attachments."
 
             mkdir ${ATTACHMENTS_DIR}
         fi
 
-        ATTACHMENT_ID=$(cutAndTrim "${LINE}" ':' 1)
-        ATTACHMENT_FILE=$(cutAndTrim "${LINE}" ':' 2)
+        ATTACHMENT_ID=$(cutAndTrim "${LINE}" : 1)
+        ATTACHMENT_FILE=$(cutAndTrim "${LINE}" : 2)
 
         exportAttachment
     done < <(lpass show ${COLOR_OPTION} ${ITEM_ID} | grep '^att-')
 }
 
 showProgress() {
-    debug "Progress goes here ${ITEM_COUNTER} ${NUM_ITEMS}."
+    debug "Processed ${ITEM_COUNTER} of ${NUM_ITEMS}."
 }
 
 OUTPUT_DIR=$(realpath ${OUTPUT_DIR})

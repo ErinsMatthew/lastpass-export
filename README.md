@@ -24,6 +24,7 @@ $ export.sh -d -f -s -u myusername /tmp/lpass
 - grep - pre-installed with macOS and most Linux distributions
 - lpass - LastPass CLI; install using [Homebrew](https://formulae.brew.sh/formula/lastpass-cli), another package manager or [manually](https://github.com/lastpass/lastpass-cli).
 - mkdir - pre-installed with macOS and most Linux distributions
+- mv - pre-installed with macOS and most Linux distributions
 - realpath - install via coreutils using [Homebrew](https://formulae.brew.sh/formula/coreutils), another package manager or [manually](https://www.gnu.org/software/coreutils/).
 - sed - pre-installed with macOS and most Linux distributions
 - wc - pre-installed with macOS and most Linux distributions
@@ -34,4 +35,4 @@ but should work on any GNU/Linux system that supports the dependencies
 above.
 ## TODO
 - [ ] Encryption at rest.
-- [ ] Show progress.
+- [x] Show progress.
