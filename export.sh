@@ -5,15 +5,17 @@ shopt -s extglob
 
 usage() {
     cat << EOT 1>&2
-Usage: export.sh [-dfhjqs] [-c opt] -u username dir
+Usage: export.sh [-defhjqs] [-a algo] [-c opt] [-p fn] -u username dir
 
 OPTIONS
 =======
+-a algo      use 'algo' for encryption via GnuPG
 -c opt       color option: one of: auto, never, or always
 -d           output debug information
 -f           overwrite output file if it already exists
 -h           show help
 -j           write output using JSON format
+-p fn        encrypt data using GnuPG; use 'fn' for passphrase file
 -q           do not display status information
 -s           stay logged in after script finishes
 -u username  login to LastPass using username
@@ -24,8 +26,8 @@ dir          directory to write output files
 
 EXAMPLES
 ========
-# export LastPass items for myusername to /tmp/lpass directory in JSON format
-$ export.sh -d -f -j -s -u myusername /tmp/lpass
+# export LastPass items for myusername to /tmp/lpass directory in encrypted JSON format
+$ export.sh -d -f -j -s -p passphrase.txt -u myusername /tmp/lpass
 
 EOT
 
@@ -40,13 +42,19 @@ debug() {
     fi
 }
 
-while getopts ":c:dfhjqsu:" FLAG; do
+while getopts ":a:c:dfhjp:qsu:" FLAG; do
     case "${FLAG}" in
+        a)
+            ENCRYPTION_ALGO=${OPTARG}
+
+            debug "Encryption algorithm set to '${ENCRYPTION_ALGO}'."
+            ;;
+
         c)
             if [[ ${OPTARG} == @(auto|never|always) ]]; then
                 COLOR_OPTION="--color=${OPTARG}"
 
-                debug "Setting color option to '${OPTARG}'."
+                debug "Setting color option to '${COLOR_OPTION}'."
             else
                 debug "Invalid color option '${OPTARG}'."
             fi
@@ -69,6 +77,16 @@ while getopts ":c:dfhjqsu:" FLAG; do
             JSON_OPTION='--json'
 
             debug "JSON output format turned on."
+            ;;
+
+        p)
+            ENCRYPT_DATA='true'
+
+            debug "Encryption turned on."
+
+            PASSPHRASE_FILE=${OPTARG}
+
+            debug "Encryption passphrase file set to '${PASSPHRASE_FILE}'."
             ;;
 
         q)
@@ -107,7 +125,19 @@ if [[ -z ${USERNAME} || -z ${OUTPUT_DIR} ]]; then
     usage
 fi
 
+if [[ ! -d ${OUTPUT_DIR} ]]; then
+    debug "Output directory is not actually a directory."
+
+    usage
+fi
+
 setDefaults() {
+    if [[ ${ENCRYPT_DATA} == 'true' && -z ${ENCRYPTION_ALGO} ]]; then
+        ENCRYPTION_ALGO='AES256'
+
+        debug "Encryption algorithm set to default of '${ENCRYPTION_ALGO}'."
+    fi
+
     if [[ -z ${COLOR_OPTION} ]]; then
         COLOR_OPTION='--color=never'
 
@@ -133,16 +163,24 @@ setDefaults() {
 
 setDefaults
 
+checkForDependency() {
+    debug "Checking for dependency '$1'."
+
+    if ! command -v $1 &> /dev/null; then
+        echo "Dependency '$1' is missing." > /dev/stderr
+
+        exit
+    fi
+}
+
 dependencyCheck() {
     for DEPENDENCY in cat cut file grep lpass mkdir mv realpath sed wc; do
-        debug "Checking for dependency '${DEPENDENCY}'."
-
-        if ! command -v ${DEPENDENCY} &> /dev/null; then
-            echo "Dependency '${DEPENDENCY}' is missing." > /dev/stderr
-
-            exit
-        fi
+        checkForDependency ${DEPENDENCY}
     done
+
+    if [[ ${ENCRYPT_DATA} == 'true' ]]; then
+        checkForDependency gpg
+    fi
 }
 
 dependencyCheck
@@ -210,6 +248,14 @@ renameAttachment() {
     fi
 }
 
+encryptData() {
+    if [[ ${ENCRYPT_DATA} == 'true' ]]; then
+        gpg --batch --passphrase-file "${PASSPHRASE_FILE}" --symmetric --cipher-algo ${ENCRYPTION_ALGO}
+    else
+        cat
+    fi
+}
+
 exportAttachment() {
     if [[ -z ${ATTACHMENT_FILE} ]]; then
         # handle un-named attachments
@@ -225,7 +271,7 @@ exportAttachment() {
     else
         debug "Exporting attachment '${ATTACHMENT_ID}' to '${ATTACHMENT_FILE}'."
 
-        lpass show ${COLOR_OPTION} ${ITEM_ID} --attach ${ATTACHMENT_ID} --quiet > "${ATTACHMENT_FILE}"
+        lpass show ${COLOR_OPTION} ${ITEM_ID} --attach ${ATTACHMENT_ID} --quiet | encryptData > "${ATTACHMENT_FILE}"
     fi
 
     if [[ ${TRY_RENAME} == 'true' ]]; then
@@ -236,7 +282,7 @@ exportAttachment() {
 exportItem() {
     debug "Exporting item '${ITEM_ID}' to '${OUTPUT_FILE}'."
 
-    lpass show ${JSON_OPTION} --all ${COLOR_OPTION} ${ITEM_ID} > "${OUTPUT_FILE}"
+    lpass show ${JSON_OPTION} --all ${COLOR_OPTION} ${ITEM_ID} | encryptData > "${OUTPUT_FILE}"
 
     # export item attachments
     while read -r LINE; do
@@ -260,6 +306,12 @@ showProgress() {
 }
 
 OUTPUT_DIR=$(realpath ${OUTPUT_DIR})
+
+if [[ ${ENCRYPT_DATA} == 'true' ]]; then
+    ITEM_EXTENSION=${ITEM_EXTENSION}.enc
+
+    debug "Item extension set to '${ITEM_EXTENSION}'."
+fi
 
 login
 
