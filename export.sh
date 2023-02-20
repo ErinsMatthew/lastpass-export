@@ -198,9 +198,7 @@ dependencyCheck
 login() {
     debug "Logging into LastPass as '${USERNAME}'."
 
-    # FIXME: Only login if not already logged in.
-
-    #lpass login ${OVERWRITE_OPTION} ${COLOR_OPTION} $USERNAME
+    lpass login ${COLOR_OPTION} $USERNAME
 }
 
 logout() {
@@ -269,6 +267,12 @@ encryptData() {
 }
 
 exportAttachment() {
+    if [[ -z ${ITEM_ID} || -z ${ATTACHMENT_ID} ]]; then
+        debug "Missing attachment information '${ITEM_ID}' or '${ATTACHMENT_ID}'."
+
+        return
+    fi
+
     if [[ -z ${ATTACHMENT_FILE} ]]; then
         # handle un-named attachments
         ATTACHMENT_FILE=${ATTACHMENT_ID}
@@ -278,15 +282,11 @@ exportAttachment() {
 
     ATTACHMENT_FILE=${ATTACHMENTS_DIR}/${ATTACHMENT_FILE}
 
-    if [[ -z ${ITEM_ID} || -z ${ATTACHMENT_ID} ]]; then
-        debug "Missing attachment information '${ITEM_ID}' or '${ATTACHMENT_ID}'."
-    else
-        debug "Exporting attachment '${ATTACHMENT_ID}' to '${ATTACHMENT_FILE}'."
+    debug "Exporting attachment '${ATTACHMENT_ID}' to '${ATTACHMENT_FILE}'."
 
-        # FIXME: Need to guess type before encryption if un-named attachment, without calling lpass show twice
+    # FIXME: Need to guess type before encryption if un-named attachment, without calling lpass show twice
 
-        lpass show ${COLOR_OPTION} ${ITEM_ID} --attach ${ATTACHMENT_ID} --quiet | encryptData > "${ATTACHMENT_FILE}"
-    fi
+    lpass show ${COLOR_OPTION} ${ITEM_ID} --attach ${ATTACHMENT_ID} --quiet | encryptData > "${ATTACHMENT_FILE}"
 
     if [[ ${TRY_RENAME} == 'true' ]]; then
         renameAttachment
