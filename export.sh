@@ -5,7 +5,7 @@ shopt -s extglob
 
 usage() {
     cat << EOT 1>&2
-Usage: export.sh [-defhjqs] [-a algo] [-c opt] [-p fn] -u username dir
+Usage: export.sh [-dfhjqs] [-a algo] [-c opt] [-p fn] -u username dir
 
 OPTIONS
 =======
@@ -119,17 +119,27 @@ shift $(( OPTIND - 1 ))
 
 OUTPUT_DIR=$1
 
-if [[ -z ${USERNAME} || -z ${OUTPUT_DIR} ]]; then
-    debug "Missing username and/or output directory."
+validateInputs() {
+    if [[ -z ${USERNAME} || -z ${OUTPUT_DIR} ]]; then
+        debug "Missing username and/or output directory."
 
-    usage
-fi
+        usage
+    fi
 
-if [[ ! -d ${OUTPUT_DIR} ]]; then
-    debug "Output directory is not actually a directory."
+    if [[ ! -d ${OUTPUT_DIR} ]]; then
+        debug "Output directory is not actually a directory."
 
-    usage
-fi
+        usage
+    fi
+
+    if [[ ${ENCRYPT_DATA} == 'true' && ! -s ${PASSPHRASE_FILE} ]]; then
+        echo "Encryption requested, but passphrase file does not exist or is empty." > /dev/stderr
+
+        exit
+    fi
+}
+
+validateInputs
 
 setDefaults() {
     if [[ ${ENCRYPT_DATA} == 'true' && -z ${ENCRYPTION_ALGO} ]]; then
@@ -188,7 +198,9 @@ dependencyCheck
 login() {
     debug "Logging into LastPass as '${USERNAME}'."
 
-    lpass login ${OVERWRITE_OPTION} ${COLOR_OPTION} $USERNAME
+    # FIXME: Only login if not already logged in.
+
+    #lpass login ${OVERWRITE_OPTION} ${COLOR_OPTION} $USERNAME
 }
 
 logout() {
@@ -337,7 +349,7 @@ if [[ ${NUM_ITEMS} -gt 0 ]]; then
             exportItem
         fi
 
-        $(( ITEM_COUNTER++ ))
+        (( ITEM_COUNTER++ ))
 
         if [[ -z ${BE_QUIET} ]]; then
             showProgress
