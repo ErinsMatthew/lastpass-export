@@ -5,7 +5,7 @@ shopt -s extglob
 
 usage() {
     cat << EOT 1>&2
-Usage: export.sh [-dfhjqs] [-a algo] [-c opt] [-p fn] -u username dir
+Usage: export.sh [-dfhjqs] [-a algo] [-c opt] [-p fn] [-x ext] -u username dir
 
 OPTIONS
 =======
@@ -19,6 +19,7 @@ OPTIONS
 -q           do not display status information
 -s           stay logged in after script finishes
 -u username  login to LastPass using username
+-x ext       use 'ext' as extension for encrypted files
 
 ARGUMENTS
 =========
@@ -42,7 +43,7 @@ debug() {
     fi
 }
 
-while getopts ":a:c:dfhjp:qsu:" FLAG; do
+while getopts ":a:c:dfhjp:qsu:x:" FLAG; do
     case "${FLAG}" in
         a)
             ENCRYPTION_ALGO=${OPTARG}
@@ -107,6 +108,12 @@ while getopts ":a:c:dfhjp:qsu:" FLAG; do
             debug "Username set to '${USERNAME}'."
             ;;
 
+        x)
+            ENCRYPTED_EXTENSION=${OPTARG}
+
+            debug "Encrypted extension set to '${ENCRYPTED_EXTENSION}'."
+            ;;
+
         h | *)
             usage
             ;;
@@ -142,10 +149,18 @@ validateInputs() {
 validateInputs
 
 setDefaults() {
-    if [[ ${ENCRYPT_DATA} == 'true' && -z ${ENCRYPTION_ALGO} ]]; then
-        ENCRYPTION_ALGO='AES256'
+    if [[ ${ENCRYPT_DATA} == 'true' ]]; then
+        if [[ -z ${ENCRYPTION_ALGO} ]]; then
+            ENCRYPTION_ALGO='AES256'
 
-        debug "Encryption algorithm set to default of '${ENCRYPTION_ALGO}'."
+            debug "Encryption algorithm set to default of '${ENCRYPTION_ALGO}'."
+        fi
+
+        if [[ -z ${ENCRYPTED_EXTENSION} ]]; then
+            ENCRYPTED_EXTENSION='enc'
+
+            debug "Encrypted extension set to default of '${ENCRYPTED_EXTENSION}'."
+        fi
     fi
 
     if [[ -z ${COLOR_OPTION} ]]; then
@@ -198,6 +213,8 @@ dependencyCheck
 login() {
     debug "Logging into LastPass as '${USERNAME}'."
 
+    # FIXME: Only login if not already logged in.
+
     lpass login ${COLOR_OPTION} $USERNAME
 }
 
@@ -215,11 +232,7 @@ cutAndTrim() {
     echo "$1" | cut -d $2 -f $3 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
 }
 
-renameAttachment() {
-    debug "Trying to rename attachment '${ATTACHMENT_FILE}'."
-
-    MIME_TYPE=$(file -b --mime-type "${ATTACHMENT_FILE}")
-
+determineExtension() {
     case "${MIME_TYPE}" in
         application/gzip | application/json | application/pdf | \
         application/rtf | application/zip | image/bmp | \
@@ -250,12 +263,6 @@ renameAttachment() {
             debug "Unknown MIME type '${MIME_TYPE}'."
             ;;
     esac
-
-    if [[ -n ${EXTENSION} ]]; then
-        debug "Renaming attachment to '${ATTACHMENT_FILE}.${EXTENSION}'."
-
-        mv "${ATTACHMENT_FILE}" "${ATTACHMENT_FILE}.${EXTENSION}"
-    fi
 }
 
 encryptData() {
@@ -264,6 +271,10 @@ encryptData() {
     else
         cat
     fi
+}
+
+downloadAttachment() {
+    lpass show ${COLOR_OPTION} ${ITEM_ID} --attach ${ATTACHMENT_ID} --quiet
 }
 
 exportAttachment() {
@@ -278,19 +289,37 @@ exportAttachment() {
         ATTACHMENT_FILE=${ATTACHMENT_ID}
 
         TRY_RENAME='true'
+    else
+        TRY_RENAME='false'
     fi
 
     ATTACHMENT_FILE=${ATTACHMENTS_DIR}/${ATTACHMENT_FILE}
 
+    if [[ ${TRY_RENAME} == 'true' ]]; then
+        # FIXME: Need to guess file type before encryption if un-named attachment without calling downloadAttachment twice
+
+        MIME_TYPE=$(downloadAttachment | file -b --mime-type -)
+
+        determineExtension
+    fi
+
+    if [[ ${ENCRYPT_DATA} == 'true' ]]; then
+        if [[ ${TRY_RENAME} == 'true' ]]; then
+            EXTENSION=${EXTENSION}.${ENCRYPTED_EXTENSION}
+        else
+            EXTENSION=${ENCRYPTED_EXTENSION}
+        fi
+    fi
+
+    if [[ -n ${EXTENSION} ]]; then
+        ATTACHMENT_FILE=${ATTACHMENT_FILE}.${EXTENSION}
+
+        debug "Updating ATTACHMENT_FILE to '${ATTACHMENT_FILE}'."
+    fi
+
     debug "Exporting attachment '${ATTACHMENT_ID}' to '${ATTACHMENT_FILE}'."
 
-    # FIXME: Need to guess type before encryption if un-named attachment, without calling lpass show twice
-
-    lpass show ${COLOR_OPTION} ${ITEM_ID} --attach ${ATTACHMENT_ID} --quiet | encryptData > "${ATTACHMENT_FILE}"
-
-    if [[ ${TRY_RENAME} == 'true' ]]; then
-        renameAttachment
-    fi
+    downloadAttachment | encryptData > "${ATTACHMENT_FILE}"
 }
 
 exportItem() {
@@ -322,7 +351,7 @@ showProgress() {
 OUTPUT_DIR=$(realpath ${OUTPUT_DIR})
 
 if [[ ${ENCRYPT_DATA} == 'true' ]]; then
-    ITEM_EXTENSION=${ITEM_EXTENSION}.enc
+    ITEM_EXTENSION=${ITEM_EXTENSION}.${ENCRYPTED_EXTENSION}
 
     debug "Item extension set to '${ITEM_EXTENSION}'."
 fi
