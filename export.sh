@@ -9,8 +9,8 @@ Usage: export.sh [-dfhjqs] [-a algo] [-c opt] [-p fn] [-x ext] -u username dir
 
 OPTIONS
 =======
--a algo      use 'algo' for encryption via GnuPG
--c opt       color option: one of: auto, never, or always
+-a algo      use 'algo' for encryption via GnuPG; default: AES256
+-c opt       color option: one of: auto, never, or always; default: never
 -d           output debug information
 -f           overwrite output file if it already exists
 -h           show help
@@ -19,7 +19,7 @@ OPTIONS
 -q           do not display status information
 -s           stay logged in after script finishes
 -u username  login to LastPass using username
--x ext       use 'ext' as extension for encrypted files
+-x ext       use 'ext' as extension for encrypted files; default: enc
 
 ARGUMENTS
 =========

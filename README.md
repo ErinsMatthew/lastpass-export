@@ -10,7 +10,7 @@ To execute this script, run the following commands once the
 dependencies are installed:
 
 ```sh
-# list possble optins and help
+# list possble options and help
 $ export.sh -h
 
 # export LastPass items for myusername to /tmp/lpass directory in encrypted JSON format
