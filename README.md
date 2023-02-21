@@ -1,5 +1,5 @@
 # lastpass-export
-Export items with attachments from LastPass. 
+Export items and their attachments from LastPass.
 
 ## Overview
 This script will export items along with their associated attachments
