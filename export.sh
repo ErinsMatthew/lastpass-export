@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -o nounset
+
 # enable extended pattern matching features
 shopt -s extglob
 
@@ -35,96 +37,111 @@ EOT
     exit
 }
 
-[[ $# -eq 0 ]] && usage
+initVariables() {
+    DEBUG='false'
+    ENCRYPT_DATA='false'
+    BE_QUIET='false'
+    STAY_LOGGED_IN='false'
+
+    ENCRYPTION_ALGO=''
+    ENCRYPTED_EXTENSION=''
+    COLOR_OPTION=''
+    OVERWRITE_OPTION=''
+    JSON_OPTION=''
+}
 
 debug() {
     if [[ ${DEBUG} == 'true' ]]; then
-        echo $*
+        echo "$@"
     fi
 }
 
-while getopts ":a:c:dfhjp:qsu:x:" FLAG; do
-    case "${FLAG}" in
-        a)
-            ENCRYPTION_ALGO=${OPTARG}
+processOptions() {
+    [[ $# -eq 0 ]] && usage
 
-            debug "Encryption algorithm set to '${ENCRYPTION_ALGO}'."
-            ;;
+    while getopts ":a:c:dfhjp:qsu:x:" FLAG; do
+        case "${FLAG}" in
+            a)
+                ENCRYPTION_ALGO=${OPTARG}
 
-        c)
-            if [[ ${OPTARG} == @(auto|never|always) ]]; then
-                COLOR_OPTION="--color=${OPTARG}"
+                debug "Encryption algorithm set to '${ENCRYPTION_ALGO}'."
+                ;;
 
-                debug "Setting color option to '${COLOR_OPTION}'."
-            else
-                debug "Invalid color option '${OPTARG}'."
-            fi
-            ;;
+            c)
+                if [[ ${OPTARG} == @(auto|never|always) ]]; then
+                    COLOR_OPTION="--color=${OPTARG}"
 
-        d)
-            DEBUG='true'
+                    debug "Setting color option to '${COLOR_OPTION}'."
+                else
+                    debug "Invalid color option '${OPTARG}'."
+                fi
+                ;;
 
-            debug "Debug mode turned on."
-            ;;
+            d)
+                DEBUG='true'
 
-        f)
-            OVERWRITE_OPTION='-f'
+                debug "Debug mode turned on."
+                ;;
 
-            debug "Force overwrite mode turned on."
-            ;;
+            f)
+                OVERWRITE_OPTION='-f'
 
-        j)
-            ITEM_EXTENSION='json'
-            JSON_OPTION='--json'
+                debug "Force overwrite mode turned on."
+                ;;
 
-            debug "JSON output format turned on."
-            ;;
+            j)
+                ITEM_EXTENSION='json'
+                JSON_OPTION='--json'
 
-        p)
-            ENCRYPT_DATA='true'
+                debug "JSON output format turned on."
+                ;;
 
-            debug "Encryption turned on."
+            p)
+                ENCRYPT_DATA='true'
 
-            PASSPHRASE_FILE=${OPTARG}
+                debug "Encryption turned on."
 
-            debug "Encryption passphrase file set to '${PASSPHRASE_FILE}'."
-            ;;
+                PASSPHRASE_FILE=${OPTARG}
 
-        q)
-            BE_QUIET='true'
+                debug "Encryption passphrase file set to '${PASSPHRASE_FILE}'."
+                ;;
 
-            debug "Quiet mode turned on."
-            ;;
+            q)
+                BE_QUIET='true'
 
-        s)
-            STAY_LOGGED_IN='true'
+                debug "Quiet mode turned on."
+                ;;
 
-            debug "Stay logged in mode turned on."
-            ;;
+            s)
+                STAY_LOGGED_IN='true'
 
-        u)
-            USERNAME=${OPTARG}
+                debug "Stay logged in mode turned on."
+                ;;
 
-            debug "Username set to '${USERNAME}'."
-            ;;
+            u)
+                USERNAME=${OPTARG}
 
-        x)
-            ENCRYPTED_EXTENSION=${OPTARG}
+                debug "Username set to '${USERNAME}'."
+                ;;
 
-            debug "Encrypted extension set to '${ENCRYPTED_EXTENSION}'."
-            ;;
+            x)
+                ENCRYPTED_EXTENSION=${OPTARG}
 
-        h | *)
-            usage
-            ;;
-    esac
-done
+                debug "Encrypted extension set to '${ENCRYPTED_EXTENSION}'."
+                ;;
 
-shift $(( OPTIND - 1 ))
+            h | *)
+                usage
+                ;;
+        esac
+    done
 
-[[ $# -eq 0 ]] && usage
+    shift $(( OPTIND - 1 ))
 
-OUTPUT_DIR=$1
+    [[ $# -eq 0 ]] && usage
+
+    OUTPUT_DIR=$(realpath "$1")
+}
 
 validateInputs() {
     if [[ -z ${USERNAME} || -z ${OUTPUT_DIR} ]]; then
@@ -145,8 +162,6 @@ validateInputs() {
         exit
     fi
 }
-
-validateInputs
 
 setDefaults() {
     if [[ ${ENCRYPT_DATA} == 'true' ]]; then
@@ -186,12 +201,10 @@ setDefaults() {
     fi
 }
 
-setDefaults
-
 checkForDependency() {
     debug "Checking for dependency '$1'."
 
-    if ! command -v $1 &> /dev/null; then
+    if ! command -v "$1" &> /dev/null; then
         echo "Dependency '$1' is missing." > /dev/stderr
 
         exit
@@ -200,7 +213,7 @@ checkForDependency() {
 
 dependencyCheck() {
     for DEPENDENCY in cat cut file grep lpass mkdir mv realpath sed wc; do
-        checkForDependency ${DEPENDENCY}
+        checkForDependency "${DEPENDENCY}"
     done
 
     if [[ ${ENCRYPT_DATA} == 'true' ]]; then
@@ -208,14 +221,12 @@ dependencyCheck() {
     fi
 }
 
-dependencyCheck
-
 login() {
     debug "Logging into LastPass as '${USERNAME}'."
 
     # FIXME: Only login if not already logged in.
 
-    lpass login ${COLOR_OPTION} $USERNAME
+    lpass login "${COLOR_OPTION}" "${USERNAME}"
 }
 
 logout() {
@@ -224,21 +235,25 @@ logout() {
     else
         debug "Logging out of LastPass."
 
-        lpass logout ${OVERWRITE_OPTION} ${COLOR_OPTION}
+        lpass logout "${OVERWRITE_OPTION}" "${COLOR_OPTION}"
     fi
 }
 
+trim() {
+    sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+}
+
 cutAndTrim() {
-    echo "$1" | cut -d $2 -f $3 | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
+    echo "$1" | cut -d "$2" -f "$3" | trim
 }
 
 determineExtension() {
-    case "${MIME_TYPE}" in
+    case "$1" in
         application/gzip | application/json | application/pdf | \
         application/rtf | application/zip | image/bmp | \
         image/gif | image/jpeg | image/png | image/tiff | \
         text/csv | text/html | text/plain | video/mp4 )
-            EXTENSION=$(cutAndTrim "${MIME_TYPE}" / 2)
+            EXTENSION=$(cutAndTrim "$1" / 2)
             ;;
 
         application/java-archive)
@@ -260,24 +275,41 @@ determineExtension() {
         *)
             EXTENSION=''
 
-            debug "Unknown MIME type '${MIME_TYPE}'."
+            debug "Unknown MIME type '$1'."
             ;;
     esac
 }
 
 encryptData() {
     if [[ ${ENCRYPT_DATA} == 'true' ]]; then
-        gpg --batch --passphrase-file "${PASSPHRASE_FILE}" --symmetric --cipher-algo ${ENCRYPTION_ALGO}
+        gpg --batch --passphrase-file "${PASSPHRASE_FILE}" --symmetric --cipher-algo "${ENCRYPTION_ALGO}"
     else
         cat
     fi
 }
 
 downloadAttachment() {
-    lpass show ${COLOR_OPTION} ${ITEM_ID} --attach ${ATTACHMENT_ID} --quiet
+    lpass show "${COLOR_OPTION}" "$1" --attach "$2" --quiet
 }
 
-exportAttachment() {
+exportItemAttachment() {
+    local ATTACHMENTS_DIR
+    local ATTACHMENT_ID
+    local ATTACHMENT_FILE
+    local MIME_TYPE
+    local UNNAMED_ATTACHMENT
+
+    ATTACHMENTS_DIR=${OUTPUT_DIR}/${ITEM_ID}
+
+    if [[ ! -d ${ATTACHMENTS_DIR} ]]; then
+        debug "Making directory '${ITEM_ID}' for item attachments."
+
+        mkdir "${ATTACHMENTS_DIR}"
+    fi
+
+    ATTACHMENT_ID=$(cutAndTrim "$1" : 1)
+    ATTACHMENT_FILE=$(cutAndTrim "$1" : 2)
+
     if [[ -z ${ITEM_ID} || -z ${ATTACHMENT_ID} ]]; then
         debug "Missing attachment information '${ITEM_ID}' or '${ATTACHMENT_ID}'."
 
@@ -288,23 +320,21 @@ exportAttachment() {
         # handle un-named attachments
         ATTACHMENT_FILE=${ATTACHMENT_ID}
 
-        TRY_RENAME='true'
+        UNNAMED_ATTACHMENT='true'
+
+        # FIXME: Need to guess file type before encryption if un-named attachment without calling downloadAttachment twice
+
+        MIME_TYPE=$(downloadAttachment "${ITEM_ID}" "${ATTACHMENT_ID}" | file -b --mime-type -)
+
+        determineExtension "${MIME_TYPE}"
     else
-        TRY_RENAME='false'
+        UNNAMED_ATTACHMENT='false'
     fi
 
     ATTACHMENT_FILE=${ATTACHMENTS_DIR}/${ATTACHMENT_FILE}
 
-    if [[ ${TRY_RENAME} == 'true' ]]; then
-        # FIXME: Need to guess file type before encryption if un-named attachment without calling downloadAttachment twice
-
-        MIME_TYPE=$(downloadAttachment | file -b --mime-type -)
-
-        determineExtension
-    fi
-
     if [[ ${ENCRYPT_DATA} == 'true' ]]; then
-        if [[ ${TRY_RENAME} == 'true' ]]; then
+        if [[ ${UNNAMED_ATTACHMENT} == 'true' ]]; then
             EXTENSION=${EXTENSION}.${ENCRYPTED_EXTENSION}
         else
             EXTENSION=${ENCRYPTED_EXTENSION}
@@ -319,73 +349,85 @@ exportAttachment() {
 
     debug "Exporting attachment '${ATTACHMENT_ID}' to '${ATTACHMENT_FILE}'."
 
-    downloadAttachment | encryptData > "${ATTACHMENT_FILE}"
+    downloadAttachment "${ITEM_ID}" "${ATTACHMENT_ID}" | encryptData > "${ATTACHMENT_FILE}"
+}
+
+listAttachments() {
+    lpass show "${COLOR_OPTION}" "$1" | grep '^att-'
 }
 
 exportItem() {
     debug "Exporting item '${ITEM_ID}' to '${OUTPUT_FILE}'."
 
-    lpass show ${JSON_OPTION} --all ${COLOR_OPTION} ${ITEM_ID} | encryptData > "${OUTPUT_FILE}"
+    lpass show "${JSON_OPTION}" --all "${COLOR_OPTION}" "${ITEM_ID}" | encryptData > "${OUTPUT_FILE}"
 
-    # export item attachments
     while read -r LINE; do
-        ATTACHMENTS_DIR=${OUTPUT_DIR}/${ITEM_ID}
-
-        if [[ ! -d ${ATTACHMENTS_DIR} ]]; then
-            debug "Making directory '${ITEM_ID}' for item attachments."
-
-            mkdir ${ATTACHMENTS_DIR}
-        fi
-
-        ATTACHMENT_ID=$(cutAndTrim "${LINE}" : 1)
-        ATTACHMENT_FILE=$(cutAndTrim "${LINE}" : 2)
-
-        exportAttachment
-    done < <(lpass show ${COLOR_OPTION} ${ITEM_ID} | grep '^att-')
+        exportItemAttachment "${LINE}"
+    done < <(listAttachments "${ITEM_ID}")
 }
 
 showProgress() {
-    debug "Processed ${ITEM_COUNTER} of ${NUM_ITEMS}."
+    if [[ ${BE_QUIET} != 'true' ]]; then
+        debug "Processed $1 of $2."
+    fi
 }
 
-OUTPUT_DIR=$(realpath ${OUTPUT_DIR})
+performSetup() {
+    initVariables
 
-if [[ ${ENCRYPT_DATA} == 'true' ]]; then
-    ITEM_EXTENSION=${ITEM_EXTENSION}.${ENCRYPTED_EXTENSION}
+    processOptions "$@"
 
-    debug "Item extension set to '${ITEM_EXTENSION}'."
-fi
+    validateInputs
 
-login
+    setDefaults
 
-debug "Retrieving list of LastPass items."
+    dependencyCheck
 
-ITEM_IDS=$(lpass ls -l --format '%ai' ${COLOR_OPTION})
+    if [[ ${ENCRYPT_DATA} == 'true' ]]; then
+        ITEM_EXTENSION=${ITEM_EXTENSION}.${ENCRYPTED_EXTENSION}
 
-NUM_ITEMS=$(echo ${ITEM_IDS} | wc -w)
+        debug "Item extension set to '${ITEM_EXTENSION}'."
+    fi
+}
 
-if [[ ${NUM_ITEMS} -gt 0 ]]; then
-    debug "Found ${NUM_ITEMS} items."
+exportVault() {
+    local ITEM_IDS
+    local NUM_ITEMS
+    local ITEM_COUNTER
 
-    ITEM_COUNTER=0
+    login
 
-    for ITEM_ID in ${ITEM_IDS}; do
-        OUTPUT_FILE=${OUTPUT_DIR}/${ITEM_ID}.${ITEM_EXTENSION}
+    debug "Retrieving list of LastPass items."
 
-        if [[ -s ${OUTPUT_FILE} && -z ${OVERWRITE_OPTION} ]]; then
-            debug "Item already exists '${OUTPUT_FILE}'. Use -f option to overwrite."
-        else
-            exportItem
-        fi
+    ITEM_IDS=$(lpass ls --long --format '%ai' "${COLOR_OPTION}")
 
-        (( ITEM_COUNTER++ ))
+    NUM_ITEMS=$(echo "${ITEM_IDS}" | wc -w | trim)
 
-        if [[ -z ${BE_QUIET} ]]; then
-            showProgress
-        fi
-    done
-else
-    debug "No items found for '${USERNAME}'."
-fi
+    if [[ ${NUM_ITEMS} -gt 0 ]]; then
+        debug "Found ${NUM_ITEMS} items."
 
-logout
+        ITEM_COUNTER=0
+
+        for ITEM_ID in ${ITEM_IDS}; do
+            OUTPUT_FILE=${OUTPUT_DIR}/${ITEM_ID}.${ITEM_EXTENSION}
+
+            if [[ -s ${OUTPUT_FILE} && -z ${OVERWRITE_OPTION} ]]; then
+                debug "Item already exists '${OUTPUT_FILE}'. Use -f option to overwrite."
+            else
+                exportItem
+            fi
+
+            (( ITEM_COUNTER++ ))
+
+            showProgress "${ITEM_COUNTER}" "${NUM_ITEMS}"
+        done
+    else
+        debug "No items found for '${USERNAME}'."
+    fi
+
+    logout
+}
+
+performSetup "$@"
+
+exportVault
