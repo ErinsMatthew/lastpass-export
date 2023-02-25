@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 set -o nounset
 
@@ -37,21 +37,26 @@ EOT
     exit
 }
 
-initVariables() {
-    DEBUG='false'
-    ENCRYPT_DATA='false'
-    BE_QUIET='false'
-    STAY_LOGGED_IN='false'
-
-    ENCRYPTION_ALGO=''
-    ENCRYPTED_EXTENSION=''
-    COLOR_OPTION=''
-    OVERWRITE_OPTION=''
-    JSON_OPTION=''
+initGlobals() {
+    declare -gA GLOBALS=(
+        [BE_QUIET]='false'              # -q
+        [COLOR_OPTION]=''               # -c
+        [DEBUG]='false'                 # -d
+        [ENCRYPT_DATA]='false'          # -p
+        [ENCRYPTED_EXTENSION]=''        # -x
+        [ENCRYPTION_ALGO]=''            # -a
+        [ITEM_EXTENSION]=''             # -x
+        [JSON_OPTION]=''                # -j
+        [OUTPUT_DIR]=''                 # dir
+        [OVERWRITE_OPTION]=''           # -f
+        [PASSPHRASE_FILE]=''            # -p
+        [STAY_LOGGED_IN]='false'        # -s
+        [USERNAME]=''                   # -u
+    )
 }
 
 debug() {
-    if [[ ${DEBUG} == 'true' ]]; then
+    if [[ ${GLOBALS[DEBUG]} == 'true' ]]; then
         echo "$@"
     fi
 }
@@ -62,72 +67,72 @@ processOptions() {
     while getopts ":a:c:dfhjp:qsu:x:" FLAG; do
         case "${FLAG}" in
             a)
-                ENCRYPTION_ALGO=${OPTARG}
+                GLOBALS[ENCRYPTION_ALGO]=${OPTARG}
 
-                debug "Encryption algorithm set to '${ENCRYPTION_ALGO}'."
+                debug "Encryption algorithm set to '${GLOBALS[ENCRYPTION_ALGO]}'."
                 ;;
 
             c)
                 if [[ ${OPTARG} == @(auto|never|always) ]]; then
-                    COLOR_OPTION="--color=${OPTARG}"
+                    GLOBALS[COLOR_OPTION]="--color=${OPTARG}"
 
-                    debug "Setting color option to '${COLOR_OPTION}'."
+                    debug "Setting color option to '${GLOBALS[COLOR_OPTION]}'."
                 else
                     debug "Invalid color option '${OPTARG}'."
                 fi
                 ;;
 
             d)
-                DEBUG='true'
+                GLOBALS[DEBUG]='true'
 
                 debug "Debug mode turned on."
                 ;;
 
             f)
-                OVERWRITE_OPTION='-f'
+                GLOBALS[OVERWRITE_OPTION]='-f'
 
                 debug "Force overwrite mode turned on."
                 ;;
 
             j)
-                ITEM_EXTENSION='json'
-                JSON_OPTION='--json'
+                GLOBALS[ITEM_EXTENSION]='json'
+                GLOBALS[JSON_OPTION]='--json'
 
                 debug "JSON output format turned on."
                 ;;
 
             p)
-                ENCRYPT_DATA='true'
+                GLOBALS[ENCRYPT_DATA]='true'
 
                 debug "Encryption turned on."
 
-                PASSPHRASE_FILE=${OPTARG}
+                GLOBALS[PASSPHRASE_FILE]=${OPTARG}
 
-                debug "Encryption passphrase file set to '${PASSPHRASE_FILE}'."
+                debug "Encryption passphrase file set to '${GLOBALS[PASSPHRASE_FILE]}'."
                 ;;
 
             q)
-                BE_QUIET='true'
+                GLOBALS[BE_QUIET]='true'
 
                 debug "Quiet mode turned on."
                 ;;
 
             s)
-                STAY_LOGGED_IN='true'
+                GLOBALS[STAY_LOGGED_IN]='true'
 
                 debug "Stay logged in mode turned on."
                 ;;
 
             u)
-                USERNAME=${OPTARG}
+                GLOBALS[USERNAME]=${OPTARG}
 
-                debug "Username set to '${USERNAME}'."
+                debug "Username set to '${GLOBALS[USERNAME]}'."
                 ;;
 
             x)
-                ENCRYPTED_EXTENSION=${OPTARG}
+                GLOBALS[ENCRYPTED_EXTENSION]=${OPTARG}
 
-                debug "Encrypted extension set to '${ENCRYPTED_EXTENSION}'."
+                debug "Encrypted extension set to '${GLOBALS[ENCRYPTED_EXTENSION]}'."
                 ;;
 
             h | *)
@@ -140,23 +145,23 @@ processOptions() {
 
     [[ $# -eq 0 ]] && usage
 
-    OUTPUT_DIR=$(realpath "$1")
+    GLOBALS[OUTPUT_DIR]=$(realpath "$1")
 }
 
 validateInputs() {
-    if [[ -z ${USERNAME} || -z ${OUTPUT_DIR} ]]; then
-        debug "Missing username and/or output directory."
+    if [[ -z ${GLOBALS[USERNAME]} || -z ${GLOBALS[OUTPUT_DIR]} ]]; then
+        echo "Missing username and/or output directory." > /dev/stderr
 
         usage
     fi
 
-    if [[ ! -d ${OUTPUT_DIR} ]]; then
-        debug "Output directory is not actually a directory."
+    if [[ ! -d ${GLOBALS[OUTPUT_DIR]} ]]; then
+        echo "Output directory is not actually a directory." > /dev/stderr
 
-        usage
+        exit
     fi
 
-    if [[ ${ENCRYPT_DATA} == 'true' && ! -s ${PASSPHRASE_FILE} ]]; then
+    if [[ ${GLOBALS[ENCRYPT_DATA]} == 'true' && ! -s ${GLOBALS[PASSPHRASE_FILE]} ]]; then
         echo "Encryption requested, but passphrase file does not exist or is empty." > /dev/stderr
 
         exit
@@ -164,40 +169,40 @@ validateInputs() {
 }
 
 setDefaults() {
-    if [[ ${ENCRYPT_DATA} == 'true' ]]; then
-        if [[ -z ${ENCRYPTION_ALGO} ]]; then
-            ENCRYPTION_ALGO='AES256'
+    if [[ ${GLOBALS[ENCRYPT_DATA]} == 'true' ]]; then
+        if [[ -z ${GLOBALS[ENCRYPTION_ALGO]} ]]; then
+            GLOBALS[ENCRYPTION_ALGO]='AES256'
 
-            debug "Encryption algorithm set to default of '${ENCRYPTION_ALGO}'."
+            debug "Encryption algorithm set to default of '${GLOBALS[ENCRYPTION_ALGO]}'."
         fi
 
-        if [[ -z ${ENCRYPTED_EXTENSION} ]]; then
-            ENCRYPTED_EXTENSION='enc'
+        if [[ -z ${GLOBALS[ENCRYPTED_EXTENSION]} ]]; then
+            GLOBALS[ENCRYPTED_EXTENSION]='enc'
 
-            debug "Encrypted extension set to default of '${ENCRYPTED_EXTENSION}'."
+            debug "Encrypted extension set to default of '${GLOBALS[ENCRYPTED_EXTENSION]}'."
         fi
     fi
 
-    if [[ -z ${COLOR_OPTION} ]]; then
-        COLOR_OPTION='--color=never'
+    if [[ -z ${GLOBALS[COLOR_OPTION]} ]]; then
+        GLOBALS[COLOR_OPTION]='--color=never'
 
-        debug "Color option set to default of '${COLOR_OPTION}'."
+        debug "Color option set to default of '${GLOBALS[COLOR_OPTION]}'."
     fi
 
-    if [[ -z ${OVERWRITE_OPTION} ]]; then
-        OVERWRITE_OPTION=''
+    if [[ -z ${GLOBALS[OVERWRITE_OPTION]} ]]; then
+        GLOBALS[OVERWRITE_OPTION]=''
 
-        debug "Overwrite option set to default of '${OVERWRITE_OPTION}'."
+        debug "Overwrite option set to default of '${GLOBALS[OVERWRITE_OPTION]}'."
     fi
 
-    if [[ -z ${JSON_OPTION} ]]; then
-        ITEM_EXTENSION='txt'
+    if [[ -z ${GLOBALS[JSON_OPTION]} ]]; then
+        GLOBALS[ITEM_EXTENSION]='txt'
 
-        debug "Item extension set to default of '${ITEM_EXTENSION}'."
+        debug "Item extension set to default of '${GLOBALS[ITEM_EXTENSION]}'."
 
-        JSON_OPTION=''
+        GLOBALS[JSON_OPTION]=''
 
-        debug "JSON option set to default of '${JSON_OPTION}'."
+        debug "JSON option set to default of '${GLOBALS[JSON_OPTION]}'."
     fi
 }
 
@@ -212,30 +217,32 @@ checkForDependency() {
 }
 
 dependencyCheck() {
+    local DEPENDENCY
+
     for DEPENDENCY in cat cut file grep lpass mkdir mv realpath sed wc; do
         checkForDependency "${DEPENDENCY}"
     done
 
-    if [[ ${ENCRYPT_DATA} == 'true' ]]; then
+    if [[ ${GLOBALS[ENCRYPT_DATA]} == 'true' ]]; then
         checkForDependency gpg
     fi
 }
 
 login() {
-    debug "Logging into LastPass as '${USERNAME}'."
+    debug "Logging into LastPass as '${GLOBALS[USERNAME]}'."
 
     # FIXME: Only login if not already logged in.
 
-    lpass login "${COLOR_OPTION}" "${USERNAME}"
+    lpass login "${GLOBALS[COLOR_OPTION]}" "${GLOBALS[USERNAME]}"
 }
 
 logout() {
-    if [[ ${STAY_LOGGED_IN} == 'true' ]]; then
+    if [[ ${GLOBALS[STAY_LOGGED_IN]} == 'true' ]]; then
         debug "Staying logged in."
     else
         debug "Logging out of LastPass."
 
-        lpass logout "${OVERWRITE_OPTION}" "${COLOR_OPTION}"
+        lpass logout "${GLOBALS[OVERWRITE_OPTION]}" "${GLOBALS[COLOR_OPTION]}"
     fi
 }
 
@@ -247,7 +254,19 @@ cutAndTrim() {
     echo "$1" | cut -d "$2" -f "$3" | trim
 }
 
+determineMimeType() {
+    local MIME_TYPE
+
+    # FIXME: Need to guess file type before encryption if un-named attachment without calling downloadAttachment twice
+
+    MIME_TYPE=$(downloadAttachment "$1" "$2" | file -b --mime-type -)
+
+    echo "${MIME_TYPE}"
+}
+
 determineExtension() {
+    local EXTENSION
+
     case "$1" in
         application/gzip | application/json | application/pdf | \
         application/rtf | application/zip | image/bmp | \
@@ -274,22 +293,22 @@ determineExtension() {
 
         *)
             EXTENSION=''
-
-            debug "Unknown MIME type '$1'."
             ;;
     esac
+
+    echo "${EXTENSION}"
 }
 
 encryptData() {
-    if [[ ${ENCRYPT_DATA} == 'true' ]]; then
-        gpg --batch --passphrase-file "${PASSPHRASE_FILE}" --symmetric --cipher-algo "${ENCRYPTION_ALGO}"
+    if [[ ${GLOBALS[ENCRYPT_DATA]} == 'true' ]]; then
+        gpg --batch --passphrase-file "${GLOBALS[PASSPHRASE_FILE]}" --symmetric --cipher-algo "${GLOBALS[ENCRYPTION_ALGO]}"
     else
         cat
     fi
 }
 
 downloadAttachment() {
-    lpass show "${COLOR_OPTION}" "$1" --attach "$2" --quiet
+    lpass show "${GLOBALS[COLOR_OPTION]}" "$1" --attach "$2" --quiet
 }
 
 exportItemAttachment() {
@@ -298,20 +317,21 @@ exportItemAttachment() {
     local ATTACHMENT_FILE
     local MIME_TYPE
     local UNNAMED_ATTACHMENT
+    local EXTENSION
 
-    ATTACHMENTS_DIR=${OUTPUT_DIR}/${ITEM_ID}
+    ATTACHMENTS_DIR=${GLOBALS[OUTPUT_DIR]}/$1
 
     if [[ ! -d ${ATTACHMENTS_DIR} ]]; then
-        debug "Making directory '${ITEM_ID}' for item attachments."
+        debug "Making directory '$1' for item attachments."
 
         mkdir "${ATTACHMENTS_DIR}"
     fi
 
-    ATTACHMENT_ID=$(cutAndTrim "$1" : 1)
-    ATTACHMENT_FILE=$(cutAndTrim "$1" : 2)
+    ATTACHMENT_ID=$(cutAndTrim "$2" : 1)
+    ATTACHMENT_FILE=$(cutAndTrim "$2" : 2)
 
-    if [[ -z ${ITEM_ID} || -z ${ATTACHMENT_ID} ]]; then
-        debug "Missing attachment information '${ITEM_ID}' or '${ATTACHMENT_ID}'."
+    if [[ -z $1 || -z ${ATTACHMENT_ID} ]]; then
+        debug "Missing attachment information '$1' or '${ATTACHMENT_ID}'."
 
         return
     fi
@@ -322,22 +342,24 @@ exportItemAttachment() {
 
         UNNAMED_ATTACHMENT='true'
 
-        # FIXME: Need to guess file type before encryption if un-named attachment without calling downloadAttachment twice
+        MIME_TYPE=$(determineMimeType "$1" "${ATTACHMENT_ID}")
 
-        MIME_TYPE=$(downloadAttachment "${ITEM_ID}" "${ATTACHMENT_ID}" | file -b --mime-type -)
+        debug "MIME type for '${ATTACHMENT_ID}' is '${MIME_TYPE}'."
 
-        determineExtension "${MIME_TYPE}"
+        EXTENSION=$(determineExtension "${MIME_TYPE}")
+
+        debug "Extension for '${MIME_TYPE}' set to '${EXTENSION}'."
     else
         UNNAMED_ATTACHMENT='false'
     fi
 
     ATTACHMENT_FILE=${ATTACHMENTS_DIR}/${ATTACHMENT_FILE}
 
-    if [[ ${ENCRYPT_DATA} == 'true' ]]; then
+    if [[ ${GLOBALS[ENCRYPT_DATA]} == 'true' ]]; then
         if [[ ${UNNAMED_ATTACHMENT} == 'true' ]]; then
-            EXTENSION=${EXTENSION}.${ENCRYPTED_EXTENSION}
+            EXTENSION=${EXTENSION}.${GLOBALS[ENCRYPTED_EXTENSION]}
         else
-            EXTENSION=${ENCRYPTED_EXTENSION}
+            EXTENSION=${GLOBALS[ENCRYPTED_EXTENSION]}
         fi
     fi
 
@@ -349,31 +371,31 @@ exportItemAttachment() {
 
     debug "Exporting attachment '${ATTACHMENT_ID}' to '${ATTACHMENT_FILE}'."
 
-    downloadAttachment "${ITEM_ID}" "${ATTACHMENT_ID}" | encryptData > "${ATTACHMENT_FILE}"
+    downloadAttachment "$1" "${ATTACHMENT_ID}" | encryptData > "${ATTACHMENT_FILE}"
 }
 
 listAttachments() {
-    lpass show "${COLOR_OPTION}" "$1" | grep '^att-'
+    lpass show "${GLOBALS[COLOR_OPTION]}" "$1" | grep '^att-'
 }
 
 exportItem() {
-    debug "Exporting item '${ITEM_ID}' to '${OUTPUT_FILE}'."
+    debug "Exporting item '$1' to '$2'."
 
-    lpass show "${JSON_OPTION}" --all "${COLOR_OPTION}" "${ITEM_ID}" | encryptData > "${OUTPUT_FILE}"
+    lpass show "${GLOBALS[JSON_OPTION]}" --all "${GLOBALS[COLOR_OPTION]}" "$1" | encryptData > "$2"
 
     while read -r LINE; do
-        exportItemAttachment "${LINE}"
-    done < <(listAttachments "${ITEM_ID}")
+        exportItemAttachment "$1" "${LINE}"
+    done < <(listAttachments "$1")
 }
 
 showProgress() {
-    if [[ ${BE_QUIET} != 'true' ]]; then
+    if [[ ${GLOBALS[BE_QUIET]} != 'true' ]]; then
         debug "Processed $1 of $2."
     fi
 }
 
 performSetup() {
-    initVariables
+    initGlobals
 
     processOptions "$@"
 
@@ -383,10 +405,10 @@ performSetup() {
 
     dependencyCheck
 
-    if [[ ${ENCRYPT_DATA} == 'true' ]]; then
-        ITEM_EXTENSION=${ITEM_EXTENSION}.${ENCRYPTED_EXTENSION}
+    if [[ ${GLOBALS[ENCRYPT_DATA]} == 'true' ]]; then
+        GLOBALS[ITEM_EXTENSION]=${GLOBALS[ITEM_EXTENSION]}.${GLOBALS[ENCRYPTED_EXTENSION]}
 
-        debug "Item extension set to '${ITEM_EXTENSION}'."
+        debug "Item extension set to '${GLOBALS[ITEM_EXTENSION]}'."
     fi
 }
 
@@ -394,12 +416,14 @@ exportVault() {
     local ITEM_IDS
     local NUM_ITEMS
     local ITEM_COUNTER
+    local ITEM_ID
+    local OUTPUT_FILE
 
     login
 
     debug "Retrieving list of LastPass items."
 
-    ITEM_IDS=$(lpass ls --long --format '%ai' "${COLOR_OPTION}")
+    ITEM_IDS=$(lpass ls --long --format '%ai' "${GLOBALS[COLOR_OPTION]}")
 
     NUM_ITEMS=$(echo "${ITEM_IDS}" | wc -w | trim)
 
@@ -409,12 +433,12 @@ exportVault() {
         ITEM_COUNTER=0
 
         for ITEM_ID in ${ITEM_IDS}; do
-            OUTPUT_FILE=${OUTPUT_DIR}/${ITEM_ID}.${ITEM_EXTENSION}
+            OUTPUT_FILE=${GLOBALS[OUTPUT_DIR]}/${ITEM_ID}.${GLOBALS[ITEM_EXTENSION]}
 
-            if [[ -s ${OUTPUT_FILE} && -z ${OVERWRITE_OPTION} ]]; then
+            if [[ -s ${OUTPUT_FILE} && -z ${GLOBALS[OVERWRITE_OPTION]} ]]; then
                 debug "Item already exists '${OUTPUT_FILE}'. Use -f option to overwrite."
             else
-                exportItem
+                exportItem "${ITEM_ID}" "${OUTPUT_FILE}"
             fi
 
             (( ITEM_COUNTER++ ))
@@ -422,7 +446,7 @@ exportVault() {
             showProgress "${ITEM_COUNTER}" "${NUM_ITEMS}"
         done
     else
-        debug "No items found for '${USERNAME}'."
+        debug "No items found for '${GLOBALS[USERNAME]}'."
     fi
 
     logout
