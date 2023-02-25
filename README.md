@@ -32,7 +32,7 @@ them using a command like:
 
 ```sh
 # decrypt vault item file using same passphrase as above
-$ gpg --batch --passphrase-file passphrase.txt --decrypt vaultItem.json.enc > vaultItem.json
+$ gpg --quiet --batch --passphrase-file passphrase.txt --decrypt vaultItem.json.enc > vaultItem.json
 ```
 
 ## Dependencies

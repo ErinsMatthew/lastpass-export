@@ -7,7 +7,7 @@ shopt -s extglob
 
 usage() {
     cat << EOT 1>&2
-Usage: export.sh [-dfhjqs] [-a algo] [-c opt] [-p fn] [-x ext] -u username dir
+Usage: export.sh [-dfhjnqs] [-a algo] [-c opt] [-i fn] [-p fn] [-x ext] -u username dir
 
 OPTIONS
 =======
@@ -16,7 +16,9 @@ OPTIONS
 -d           output debug information
 -f           overwrite output file if it already exists
 -h           show help
+-i fn        write an index file to 'fn'
 -j           write output using JSON format
+-n           do not export items; typically used when you just want an index
 -p fn        encrypt data using GnuPG; use 'fn' for passphrase file
 -q           do not display status information
 -s           stay logged in after script finishes
@@ -41,10 +43,13 @@ initGlobals() {
     declare -gA GLOBALS=(
         [BE_QUIET]='false'              # -q
         [COLOR_OPTION]=''               # -c
+        [CREATE_INDEX]='false'          # -i
         [DEBUG]='false'                 # -d
+        [EXPORT_ITEMS]='true'           # -n
         [ENCRYPT_DATA]='false'          # -p
         [ENCRYPTED_EXTENSION]=''        # -x
         [ENCRYPTION_ALGO]=''            # -a
+        [INDEX_FILE]=''                 # -i
         [ITEM_EXTENSION]=''             # -x
         [JSON_OPTION]=''                # -j
         [OUTPUT_DIR]=''                 # dir
@@ -64,7 +69,7 @@ debug() {
 processOptions() {
     [[ $# -eq 0 ]] && usage
 
-    while getopts ":a:c:dfhjp:qsu:x:" FLAG; do
+    while getopts ":a:c:dfhi:jnp:qsu:x:" FLAG; do
         case "${FLAG}" in
             a)
                 GLOBALS[ENCRYPTION_ALGO]=${OPTARG}
@@ -94,11 +99,30 @@ processOptions() {
                 debug "Force overwrite mode turned on."
                 ;;
 
+            i)
+                GLOBALS[CREATE_INDEX]='true'
+
+                debug "Create index mode turned on."
+
+                GLOBALS[INDEX_FILE]=${OPTARG}
+
+                debug "Index filename set to '${GLOBALS[INDEX_FILE]}'."
+                ;;
+
             j)
-                GLOBALS[ITEM_EXTENSION]='json'
                 GLOBALS[JSON_OPTION]='--json'
 
                 debug "JSON output format turned on."
+
+                GLOBALS[ITEM_EXTENSION]='json'
+
+                debug "Item extension set to '${GLOBALS[ITEM_EXTENSION]}'."
+                ;;
+
+            n)
+                GLOBALS[EXPORT_ITEMS]='false'
+
+                debug "Export items mode turned off."
                 ;;
 
             p)
@@ -163,6 +187,12 @@ validateInputs() {
 
     if [[ ${GLOBALS[ENCRYPT_DATA]} == 'true' && ! -s ${GLOBALS[PASSPHRASE_FILE]} ]]; then
         echo "Encryption requested, but passphrase file does not exist or is empty." > /dev/stderr
+
+        exit
+    fi
+
+    if [[ ${GLOBALS[EXPORT_ITEMS]} == 'false' && ${GLOBALS[CREATE_INDEX]} == 'false' ]]; then
+        echo "Export items and create index modes are both disabled. Nothing to do." > /dev/stderr
 
         exit
     fi
@@ -297,7 +327,7 @@ determineExtension() {
 
 encryptData() {
     if [[ ${GLOBALS[ENCRYPT_DATA]} == 'true' ]]; then
-        gpg --batch --passphrase-file "${GLOBALS[PASSPHRASE_FILE]}" --symmetric --cipher-algo "${GLOBALS[ENCRYPTION_ALGO]}"
+        gpg --quiet --batch --passphrase-file "${GLOBALS[PASSPHRASE_FILE]}" --symmetric --cipher-algo "${GLOBALS[ENCRYPTION_ALGO]}"
     else
         cat
     fi
@@ -414,35 +444,52 @@ exportVault() {
     local ITEM_COUNTER
     local ITEM_ID
     local OUTPUT_FILE
+    local INDEX_FILE
 
     login
 
-    debug "Retrieving list of LastPass items."
+    if [[ ${GLOBALS[EXPORT_ITEMS]} == 'true' ]]; then
+        debug "Retrieving list of LastPass items."
 
-    ITEM_IDS=$(lpass ls --long --format '%ai' "${GLOBALS[COLOR_OPTION]}")
+        ITEM_IDS=$(lpass ls --long --format '%ai' "${GLOBALS[COLOR_OPTION]}")
 
-    NUM_ITEMS=$(echo "${ITEM_IDS}" | wc -w | trim)
+        NUM_ITEMS=$(echo "${ITEM_IDS}" | wc -w | trim)
 
-    if [[ ${NUM_ITEMS} -gt 0 ]]; then
-        debug "Found ${NUM_ITEMS} items."
+        if [[ ${NUM_ITEMS} -gt 0 ]]; then
+            debug "Found ${NUM_ITEMS} items."
 
-        ITEM_COUNTER=0
+            ITEM_COUNTER=0
 
-        for ITEM_ID in ${ITEM_IDS}; do
-            OUTPUT_FILE=${GLOBALS[OUTPUT_DIR]}/${ITEM_ID}.${GLOBALS[ITEM_EXTENSION]}
+            for ITEM_ID in ${ITEM_IDS}; do
+                    OUTPUT_FILE=${GLOBALS[OUTPUT_DIR]}/${ITEM_ID}.${GLOBALS[ITEM_EXTENSION]}
 
-            if [[ -s ${OUTPUT_FILE} && -z ${GLOBALS[OVERWRITE_OPTION]} ]]; then
-                debug "Item already exists '${OUTPUT_FILE}'. Use -f option to overwrite."
-            else
-                exportItem "${ITEM_ID}" "${OUTPUT_FILE}"
-            fi
+                    if [[ -s ${OUTPUT_FILE} && -z ${GLOBALS[OVERWRITE_OPTION]} ]]; then
+                        debug "Item already exists '${OUTPUT_FILE}'. Use -f option to overwrite."
+                    else
+                        exportItem "${ITEM_ID}" "${OUTPUT_FILE}"
+                    fi
 
-            (( ITEM_COUNTER++ ))
+                (( ITEM_COUNTER++ ))
 
-            showProgress "${ITEM_COUNTER}" "${NUM_ITEMS}"
-        done
-    else
-        debug "No items found for '${GLOBALS[USERNAME]}'."
+                showProgress "${ITEM_COUNTER}" "${NUM_ITEMS}"
+            done
+        else
+            debug "No items found for '${GLOBALS[USERNAME]}'."
+        fi
+    fi
+
+    if [[ ${GLOBALS[CREATE_INDEX]} == 'true' ]]; then
+        debug "Creating index of LastPass items."
+
+        INDEX_FILE=${GLOBALS[OUTPUT_DIR]}/${GLOBALS[INDEX_FILE]}
+
+        if [[ ${GLOBALS[ENCRYPT_DATA]} == 'true' ]]; then
+            INDEX_FILE=${INDEX_FILE}.${GLOBALS[ENCRYPTED_EXTENSION]}
+        fi
+
+        debug "Index file set to '${INDEX_FILE}'."
+
+        lpass ls --long --format '%ai|%an|%aN' "${GLOBALS[COLOR_OPTION]}" | encryptData > "${INDEX_FILE}"
     fi
 
     logout
