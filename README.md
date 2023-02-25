@@ -19,10 +19,23 @@ dependencies are installed:
 $ export.sh -h
 
 # export LastPass items for myusername to /tmp/lpass directory in encrypted JSON format
-$ export.sh -d -f -j -s -p passphrase.txt -u myusername /tmp/lpass
+$ export.sh -dfjs -p passphrase.txt -u myusername /tmp/lpass
 
 # or possibly using `caffeinate` if you have a large vault or a slow connection
-$ caffeinate export.sh -d -f -j -s -p passphrase.txt -u myusername /tmp/lpass
+$ caffeinate export.sh -dfjs -p passphrase.txt -u myusername /tmp/lpass
+
+# export LastPass index file for myusername to /tmp/lpass directory in encrypted format
+$ export.sh -ds -i index.txt -p passphrase.txt -u myusername /tmp/lpass
+```
+
+## Index File
+
+If you include the `-i` option when running the command, the script will create
+an index file in the output directory in the format below.  It will be encrypted
+if encryption options are turned on.
+
+```text
+<Item ID>|<Item Name>|<Item Full Name>
 ```
 
 ## Decryption
