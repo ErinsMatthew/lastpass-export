@@ -25,6 +25,16 @@ $ export.sh -d -f -j -s -p passphrase.txt -u myusername /tmp/lpass
 $ caffeinate export.sh -d -f -j -s -p passphrase.txt -u myusername /tmp/lpass
 ```
 
+## Decryption
+
+If you chose to encrypt your vault items and attachments, you can decrypt
+them using a command like:
+
+```sh
+# decrypt vault item file using same passphrase as above
+$ gpg --batch --passphrase-file passphrase.txt --decrypt vaultItem.json.enc > vaultItem.json
+```
+
 ## Dependencies
 
 - `cat` - pre-installed with macOS and most Linux distributions
