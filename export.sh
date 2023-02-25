@@ -255,13 +255,9 @@ cutAndTrim() {
 }
 
 determineMimeType() {
-    local MIME_TYPE
-
     # FIXME: Need to guess file type before encryption if un-named attachment without calling downloadAttachment twice
 
-    MIME_TYPE=$(downloadAttachment "$1" "$2" | file -b --mime-type -)
-
-    echo "${MIME_TYPE}"
+    downloadAttachment "$1" "$2" | file -b --mime-type -
 }
 
 determineExtension() {
