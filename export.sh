@@ -14,7 +14,7 @@ OPTIONS
 -a algo      use 'algo' for encryption via GnuPG; default: AES256
 -c opt       color option: one of: auto, never, or always; default: never
 -d           output debug information
--f           overwrite output file if it already exists
+-f           overwrite output and index files if they already exists
 -h           show help
 -i fn        write an index file to 'fn'
 -j           write output using JSON format
@@ -494,7 +494,11 @@ exportVault() {
 
         debug "Index file set to '${INDEX_FILE}'."
 
-        echo "${ITEMS}" | encryptData > "${INDEX_FILE}"
+        if [[ -s ${INDEX_FILE} && -z ${GLOBALS[OVERWRITE_OPTION]} ]]; then
+            debug "Index file already exists '${INDEX_FILE}'. Use -f option to overwrite."
+        else
+            echo "${ITEMS}" | encryptData > "${INDEX_FILE}"
+        fi
     fi
 
     logout
