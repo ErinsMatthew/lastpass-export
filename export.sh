@@ -439,6 +439,7 @@ performSetup() {
 }
 
 exportVault() {
+    local ITEMS
     local ITEM_IDS
     local NUM_ITEMS
     local ITEM_COUNTER
@@ -448,12 +449,16 @@ exportVault() {
 
     login
 
+    debug "Retrieving list of LastPass items."
+
+    ITEMS=$(lpass ls --long --format '%ai|%an|%aN' "${GLOBALS[COLOR_OPTION]}")
+
     if [[ ${GLOBALS[EXPORT_ITEMS]} == 'true' ]]; then
-        debug "Retrieving list of LastPass items."
+        debug "Exporting items."
 
-        ITEM_IDS=$(lpass ls --long --format '%ai' "${GLOBALS[COLOR_OPTION]}")
+        ITEM_IDS=$(echo "${ITEMS}" | cut -d '|' -f 1)
 
-        NUM_ITEMS=$(echo "${ITEM_IDS}" | wc -w | trim)
+        NUM_ITEMS=$(echo "${ITEMS}" | wc -l | trim)
 
         if [[ ${NUM_ITEMS} -gt 0 ]]; then
             debug "Found ${NUM_ITEMS} items."
@@ -489,7 +494,7 @@ exportVault() {
 
         debug "Index file set to '${INDEX_FILE}'."
 
-        lpass ls --long --format '%ai|%an|%aN' "${GLOBALS[COLOR_OPTION]}" | encryptData > "${INDEX_FILE}"
+        echo "${ITEMS}" | encryptData > "${INDEX_FILE}"
     fi
 
     logout
