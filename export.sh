@@ -438,27 +438,41 @@ performSetup() {
     fi
 }
 
-exportVault() {
-    local ITEMS
+createIndex() {
+    local INDEX_FILE
+
+    if [[ ${GLOBALS[CREATE_INDEX]} == 'true' ]]; then
+        debug "Creating index of LastPass items."
+
+        INDEX_FILE=${GLOBALS[OUTPUT_DIR]}/${GLOBALS[INDEX_FILE]}
+
+        if [[ ${GLOBALS[ENCRYPT_DATA]} == 'true' ]]; then
+            INDEX_FILE=${INDEX_FILE}.${GLOBALS[ENCRYPTED_EXTENSION]}
+        fi
+
+        debug "Index file set to '${INDEX_FILE}'."
+
+        if [[ -s ${INDEX_FILE} && -z ${GLOBALS[OVERWRITE_OPTION]} ]]; then
+            debug "Index file already exists '${INDEX_FILE}'. Use -f option to overwrite."
+        else
+            echo "$1" | encryptData > "${INDEX_FILE}"
+        fi
+    fi
+}
+
+exportAllItems() {
     local ITEM_IDS
     local NUM_ITEMS
     local ITEM_COUNTER
     local ITEM_ID
     local OUTPUT_FILE
-    local INDEX_FILE
-
-    login
-
-    debug "Retrieving list of LastPass items."
-
-    ITEMS=$(lpass ls --long --format '%ai|%an|%aN' "${GLOBALS[COLOR_OPTION]}")
 
     if [[ ${GLOBALS[EXPORT_ITEMS]} == 'true' ]]; then
         debug "Exporting items."
 
-        ITEM_IDS=$(echo "${ITEMS}" | cut -d '|' -f 1)
+        ITEM_IDS=$(echo "$1" | cut -d '|' -f 1)
 
-        NUM_ITEMS=$(echo "${ITEMS}" | wc -l | trim)
+        NUM_ITEMS=$(echo "$1" | wc -l | trim)
 
         if [[ ${NUM_ITEMS} -gt 0 ]]; then
             debug "Found ${NUM_ITEMS} items."
@@ -482,24 +496,20 @@ exportVault() {
             debug "No items found for '${GLOBALS[USERNAME]}'."
         fi
     fi
+}
 
-    if [[ ${GLOBALS[CREATE_INDEX]} == 'true' ]]; then
-        debug "Creating index of LastPass items."
+exportVault() {
+    local ITEMS
 
-        INDEX_FILE=${GLOBALS[OUTPUT_DIR]}/${GLOBALS[INDEX_FILE]}
+    login
 
-        if [[ ${GLOBALS[ENCRYPT_DATA]} == 'true' ]]; then
-            INDEX_FILE=${INDEX_FILE}.${GLOBALS[ENCRYPTED_EXTENSION]}
-        fi
+    debug "Retrieving list of LastPass items."
 
-        debug "Index file set to '${INDEX_FILE}'."
+    ITEMS=$(lpass ls --long --format '%ai|%an|%aN' "${GLOBALS[COLOR_OPTION]}")
 
-        if [[ -s ${INDEX_FILE} && -z ${GLOBALS[OVERWRITE_OPTION]} ]]; then
-            debug "Index file already exists '${INDEX_FILE}'. Use -f option to overwrite."
-        else
-            echo "${ITEMS}" | encryptData > "${INDEX_FILE}"
-        fi
-    fi
+    createIndex "${ITEMS}"
+
+    exportAllItems "${ITEMS}"
 
     logout
 }
