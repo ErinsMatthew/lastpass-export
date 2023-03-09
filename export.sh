@@ -472,7 +472,7 @@ exportAllItems() {
 
         ITEM_IDS=$(echo "$1" | cut -d '|' -f 1)
 
-        NUM_ITEMS=$(echo "$1" | wc -l | trim)
+        NUM_ITEMS=$(echo -n "$1" | wc -l | trim)
 
         if [[ ${NUM_ITEMS} -gt 0 ]]; then
             debug "Found ${NUM_ITEMS} items."
