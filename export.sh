@@ -7,7 +7,7 @@ shopt -s extglob
 
 usage() {
     cat << EOT 1>&2
-Usage: export.sh [-dfhjnqs] [-a algo] [-c opt] [-i fn] [-p fn] [-x ext] -u username dir
+Usage: export.sh [-dfhjnqs] [-a algo] [-c opt] [-i fn] [-p fn] [-x ext] [-z fn] -u username dir
 
 OPTIONS
 =======
@@ -24,6 +24,7 @@ OPTIONS
 -s           stay logged in after script finishes
 -u username  login to LastPass using username
 -x ext       use 'ext' as extension for encrypted files; default: enc
+-z fn        zip up the output directory to 'fn' using tar and gzip
 
 ARGUMENTS
 =========
@@ -57,6 +58,7 @@ initGlobals() {
         [PASSPHRASE_FILE]=''            # -p
         [STAY_LOGGED_IN]='false'        # -s
         [USERNAME]=''                   # -u
+        [ZIP_FILE]=''                   # -z
     )
 }
 
@@ -69,7 +71,7 @@ debug() {
 processOptions() {
     [[ $# -eq 0 ]] && usage
 
-    while getopts ":a:c:dfhi:jnp:qsu:x:" FLAG; do
+    while getopts ":a:c:dfhi:jnp:qsu:x:z:" FLAG; do
         case "${FLAG}" in
             a)
                 GLOBALS[ENCRYPTION_ALGO]=${OPTARG}
@@ -157,6 +159,12 @@ processOptions() {
                 GLOBALS[ENCRYPTED_EXTENSION]=${OPTARG}
 
                 debug "Encrypted extension set to '${GLOBALS[ENCRYPTED_EXTENSION]}'."
+                ;;
+
+            z)
+                GLOBALS[ZIP_FILE]=${OPTARG}
+
+                debug "Zip file set to '${GLOBALS[PASSPHRASE_FILE]}'."
                 ;;
 
             h | *)
@@ -255,6 +263,10 @@ dependencyCheck() {
 
     if [[ ${GLOBALS[ENCRYPT_DATA]} == 'true' ]]; then
         checkForDependency gpg
+    fi
+
+    if [[ -n ${GLOBALS[ZIP_FILE]} ]]; then
+        checkForDependency tar
     fi
 }
 
@@ -498,6 +510,14 @@ exportAllItems() {
     fi
 }
 
+zipOutputDirectory() {
+    if [[ -n ${GLOBALS[ZIP_FILE]} ]]; then
+        debug "Zipping output directory to '${GLOBALS[ZIP_FILE]}'."
+
+        tar --create --gzip --file "${GLOBALS[ZIP_FILE]}" "${GLOBALS[OUTPUT_DIR]}"
+    fi
+}
+
 exportVault() {
     local ITEMS
 
@@ -510,6 +530,8 @@ exportVault() {
     createIndex "${ITEMS}"
 
     exportAllItems "${ITEMS}"
+
+    zipOutputDirectory
 
     logout
 }

@@ -26,6 +26,9 @@ $ caffeinate export.sh -dfjs -p passphrase.txt -u myusername /tmp/lpass
 
 # export LastPass index file for myusername to /tmp/lpass directory in encrypted format
 $ export.sh -ds -i index.txt -p passphrase.txt -u myusername /tmp/lpass
+
+# export LastPass index file for myusername to /tmp/lpass directory in encrypted format and then zip it up into a tarball
+$ export.sh -ds -i index.txt -z lpass.tar.gz -p passphrase.txt -u myusername /tmp/lpass
 ```
 
 ## Index File
