@@ -514,7 +514,7 @@ zipOutputDirectory() {
     if [[ -n ${GLOBALS[ZIP_FILE]} ]]; then
         debug "Zipping output directory to '${GLOBALS[ZIP_FILE]}'."
 
-        tar --create --gzip --file "${GLOBALS[ZIP_FILE]}" "${GLOBALS[OUTPUT_DIR]}"
+        tar --create --gzip --file "${GLOBALS[ZIP_FILE]}" --directory "${GLOBALS[OUTPUT_DIR]}" .
     fi
 }
 
