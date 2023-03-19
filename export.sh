@@ -69,6 +69,10 @@ debug() {
 }
 
 processOptions() {
+    local FLAG
+    local OPTARG
+    local OPTIND
+
     [[ $# -eq 0 ]] && usage
 
     while getopts ":a:c:dfhi:jnp:qsu:x:z:" FLAG; do
