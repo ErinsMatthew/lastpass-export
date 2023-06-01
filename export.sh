@@ -529,7 +529,7 @@ exportVault() {
 
     debug "Retrieving list of LastPass items."
 
-    ITEMS=$(lpass ls --long --format '%ai|%an|%aN' "${GLOBALS[COLOR_OPTION]}")
+    ITEMS=$(lpass ls --long --format '%ai|%an|%au|%aN' "${GLOBALS[COLOR_OPTION]}")
 
     createIndex "${ITEMS}"
 
