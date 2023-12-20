@@ -11,15 +11,17 @@ Usage: export.sh [-dfhjnqs] [-a algo] [-c opt] [-i fn] [-p fn] [-x ext] [-z fn] 
 
 OPTIONS
 =======
--a algo      use 'algo' for encryption via GnuPG; default: AES256
+-a algo      use 'algo' for encryption; default: aes-256-cbc (OpenSSL), AES256 (GnuPG)
 -c opt       color option: one of: auto, never, or always; default: never
 -d           output debug information
+-e prog      use 'prog' for encryption; either 'openssl' or 'gnupg'; default: openssl
 -f           overwrite output and index files if they already exists
 -h           show help
 -i fn        write an index file to 'fn'
 -j           write output using JSON format
+-k kdf       use 'kdf' for key derivation function; default: pbkdf2 (OpenSSL), N/A (GnuPG)
 -n           do not export items; typically used when you just want an index
--p fn        encrypt data using GnuPG; use 'fn' for passphrase file
+-p fn        encrypt data; use 'fn' for passphrase file
 -q           do not display status information
 -s           stay logged in after script finishes
 -u username  login to LastPass using username
@@ -50,6 +52,8 @@ initGlobals() {
         [ENCRYPT_DATA]='false'          # -p
         [ENCRYPTED_EXTENSION]=''        # -x
         [ENCRYPTION_ALGO]=''            # -a
+        [ENCRYPTION_KDF]=''             # -k
+        [ENCRYPTION_PROG]=''            # -e
         [INDEX_FILE]=''                 # -i
         [ITEM_EXTENSION]=''             # -x
         [JSON_OPTION]=''                # -j
@@ -75,7 +79,7 @@ processOptions() {
 
     [[ $# -eq 0 ]] && usage
 
-    while getopts ":a:c:dfhi:jnp:qsu:x:z:" FLAG; do
+    while getopts ":a:c:de:fhi:jk:np:qsu:x:z:" FLAG; do
         case "${FLAG}" in
             a)
                 GLOBALS[ENCRYPTION_ALGO]=${OPTARG}
@@ -97,6 +101,12 @@ processOptions() {
                 GLOBALS[DEBUG]='true'
 
                 debug "Debug mode turned on."
+                ;;
+
+            e)
+                GLOBALS[ENCRYPTION_PROG]=${OPTARG}
+
+                debug "Encryption program set to '${GLOBALS[ENCRYPTION_PROG]}'."
                 ;;
 
             f)
@@ -123,6 +133,12 @@ processOptions() {
                 GLOBALS[ITEM_EXTENSION]='json'
 
                 debug "Item extension set to '${GLOBALS[ITEM_EXTENSION]}'."
+                ;;
+
+            k)
+                GLOBALS[ENCRYPTION_KDF]=${OPTARG}
+
+                debug "Encryption key derivation function set to '${GLOBALS[ENCRYPTION_KDF]}'."
                 ;;
 
             n)
@@ -212,10 +228,31 @@ validateInputs() {
 
 setDefaults() {
     if [[ ${GLOBALS[ENCRYPT_DATA]} == 'true' ]]; then
+        if [[ -z ${GLOBALS[ENCRYPTION_PROG]} ]]; then
+            GLOBALS[ENCRYPTION_PROG]='openssl'
+
+            debug "Encryption program set to default of '${GLOBALS[ENCRYPTION_PROG]}'."
+        fi
+
+
         if [[ -z ${GLOBALS[ENCRYPTION_ALGO]} ]]; then
-            GLOBALS[ENCRYPTION_ALGO]='AES256'
+            if [[ ${GLOBALS[ENCRYPTION_PROG]} == 'openssl' ]]; then
+                GLOBALS[ENCRYPTION_ALGO]='aes-256-cbc'
+            else
+                GLOBALS[ENCRYPTION_ALGO]='AES256'
+            fi
 
             debug "Encryption algorithm set to default of '${GLOBALS[ENCRYPTION_ALGO]}'."
+        fi
+
+        if [[ -z ${GLOBALS[ENCRYPTION_KDF]} ]]; then
+            if [[ ${GLOBALS[ENCRYPTION_PROG]} == 'openssl' ]]; then
+                GLOBALS[ENCRYPTION_KDF]='pbkdf2'
+            else
+                GLOBALS[ENCRYPTION_KDF]=''
+            fi
+
+            debug "Encryption key derivation function set to default of '${GLOBALS[ENCRYPTION_KDF]}'."
         fi
 
         if [[ -z ${GLOBALS[ENCRYPTED_EXTENSION]} ]]; then
@@ -266,7 +303,11 @@ dependencyCheck() {
     done
 
     if [[ ${GLOBALS[ENCRYPT_DATA]} == 'true' ]]; then
-        checkForDependency gpg
+        if [[ ${GLOBALS[ENCRYPTION_PROG]} == 'openssl' ]]; then
+            checkForDependency openssl
+        else
+            checkForDependency gpg
+        fi
     fi
 
     if [[ -n ${GLOBALS[ZIP_FILE]} ]]; then
@@ -343,7 +384,11 @@ determineExtension() {
 
 encryptData() {
     if [[ ${GLOBALS[ENCRYPT_DATA]} == 'true' ]]; then
-        gpg --quiet --batch --passphrase-file "${GLOBALS[PASSPHRASE_FILE]}" --symmetric --cipher-algo "${GLOBALS[ENCRYPTION_ALGO]}"
+        if [[ ${GLOBALS[ENCRYPTION_PROG]} == 'openssl' ]]; then
+            openssl enc -"${GLOBALS[ENCRYPTION_ALGO]}" -provider default -"${GLOBALS[ENCRYPTION_KDF]}" -pass file:"${GLOBALS[PASSPHRASE_FILE]}"
+        else
+            gpg --quiet --batch --passphrase-file "${GLOBALS[PASSPHRASE_FILE]}" --symmetric --cipher-algo "${GLOBALS[ENCRYPTION_ALGO]}"
+        fi
     else
         cat
     fi
