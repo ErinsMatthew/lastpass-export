@@ -7,7 +7,7 @@ shopt -s extglob
 
 usage() {
     cat << EOT 1>&2
-Usage: export.sh [-dfhjnqs] [-a algo] [-c opt] [-i fn] [-p fn] [-x ext] [-z fn] -u username dir
+Usage: export.sh [-dfhjnqs] [-a algo] [-c opt] [-e prog] [-i fn] [-k kdf] [-p fn] [-x ext] [-z fn] -u username dir
 
 OPTIONS
 =======
@@ -233,7 +233,6 @@ setDefaults() {
 
             debug "Encryption program set to default of '${GLOBALS[ENCRYPTION_PROG]}'."
         fi
-
 
         if [[ -z ${GLOBALS[ENCRYPTION_ALGO]} ]]; then
             if [[ ${GLOBALS[ENCRYPTION_PROG]} == 'openssl' ]]; then
